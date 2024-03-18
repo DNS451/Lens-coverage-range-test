@@ -1,0 +1,96 @@
+import cv2
+import numpy as np
+import tkinter as tk
+from tkinter import filedialog
+from PIL import Image, ImageTk
+
+class ImageAnalyzer(tk.Tk):
+    def __init__(self):
+        super().__init__()
+
+        self.image = None
+        self.thumbnail = None
+        self.tk_image = None
+        self.aspect_ratio = 1.0  # 长宽比
+        self.thumbnail_size = (500, 500)  # 缩略图大小
+
+        # 创建左侧图片显示区域和按钮
+        self.canvas = tk.Canvas(self)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        button_frame = tk.Frame(self)
+        button_frame.pack(side=tk.LEFT, fill=tk.Y)
+
+        open_button = tk.Button(button_frame, text='打开图片', command=self.open_image)
+        open_button.pack(side=tk.TOP, fill=tk.X)
+
+        clear_button = tk.Button(button_frame, text='清除图片', command=self.clear_image)
+        clear_button.pack(side=tk.TOP, fill=tk.X)
+
+        # 创建右侧菜单栏
+        menu_frame = tk.Frame(self)
+        menu_frame.pack(side=tk.LEFT, fill=tk.Y)
+
+        # 创建黑圈占比和裁切系数显示
+        self.black_circle_label = tk.Label(menu_frame, text='可用画面: 0%')
+        self.black_circle_label.pack(side=tk.TOP, fill=tk.X)
+
+        self.crop_factor_label = tk.Label(menu_frame, text='裁切系数: inf')
+        self.crop_factor_label.pack(side=tk.TOP, fill=tk.X)
+
+        # 创建滑块
+        self.slider = tk.Scale(menu_frame, from_=10, to=100, orient=tk.HORIZONTAL, command=self.update_scale)
+        self.slider.pack(side=tk.TOP, fill=tk.X)
+
+    def open_image(self):
+        file_path = filedialog.askopenfilename()
+        if file_path:
+            self.image = cv2.imread(file_path)
+            height, width = self.image.shape[:2]
+            self.aspect_ratio = width / height  # 计算长宽比
+
+            # 按照长宽比创建缩略图
+            new_height = self.thumbnail_size[1]
+            new_width = int(new_height * self.aspect_ratio)
+            self.thumbnail = cv2.resize(self.image, (new_width, new_height))
+
+            image = Image.fromarray(cv2.cvtColor(self.thumbnail, cv2.COLOR_BGR2RGB))
+            self.tk_image = ImageTk.PhotoImage(image)
+
+            self.canvas.create_image(0, 0, image=self.tk_image, anchor='nw')
+
+    def clear_image(self):
+        self.canvas.delete('all')
+        self.image = None
+        self.thumbnail = None
+        self.tk_image = None
+        self.aspect_ratio = 1.0  # 重置长宽比
+
+    def update_scale(self, value):
+        if self.image is not None:
+            self.canvas.delete('rectangle')  # 删除旧的线框
+            ratio = int(value) / 100
+            height, width = self.thumbnail.shape[:2]
+
+            # 按照长宽比调整新线框的大小
+            new_height = int(height * ratio)
+            new_width = int(new_height * self.aspect_ratio)
+            x = (width - new_width) // 2
+            y = (height - new_height) // 2
+
+            self.canvas.create_rectangle(x, y, x+new_width, y+new_height, outline='red', tags='rectangle')
+
+            black_circle_percent = ratio * 100
+            self.black_circle_label.config(text=f'可用画面: {black_circle_percent:.0f}%')
+
+            if black_circle_percent > 0:
+                crop_factor = 100 / black_circle_percent
+            else:
+                crop_factor = float('inf')
+
+            # 修改裁切系数的显示方式，保留2位小数
+            self.crop_factor_label.config(text=f'裁切系数: {crop_factor:.2f}')
+
+if __name__ == '__main__':
+    app = ImageAnalyzer()
+    app.mainloop()
